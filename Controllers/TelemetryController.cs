@@ -1,3 +1,4 @@
+using System.Globalization;
 using IoTSensorTelemetry.Models.Dtos;
 using IoTSensorTelemetry.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -41,14 +42,23 @@ public class TelemetryController : ControllerBase
         return CreatedAtAction(nameof(GetBySensorId), new { sensorId = response.SensorId }, response);
     }
 
-    /// <summary>Fetches all stored telemetry readings for a given sensor, newest first.</summary>
+    /// <summary>
+    /// Fetches stored telemetry readings for a given sensor, newest first.
+    /// Supports optional date-range filtering (fromDate/toDate, yyyy-MM-dd, inclusive)
+    /// and pagination (page, pageSize).
+    /// </summary>
     [HttpGet("{sensorId}")]
-    [ProducesResponseType(typeof(IEnumerable<TelemetryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedTelemetryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public ActionResult<IEnumerable<TelemetryResponse>> GetBySensorId(string sensorId)
+    public ActionResult<PagedTelemetryResponse> GetBySensorId(
+        string sensorId,
+        [FromQuery] string? fromDate,
+        [FromQuery] string? toDate,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
-        // Defensive validation on the route parameter too — GET requests bypass DTO
-        // validation entirely, so an unvalidated route value should never be trusted.
+        // Defensive validation on route/query parameters — GET requests bypass DTO
+        // validation entirely, so nothing here can be trusted without an explicit check.
         if (string.IsNullOrWhiteSpace(sensorId) || sensorId.Length > 100)
         {
             return Problem(
@@ -57,16 +67,61 @@ public class TelemetryController : ControllerBase
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var readings = _telemetryService.GetBySensorId(sensorId);
-
-        var response = readings.Select(r => new TelemetryResponse
+        if (page < 1)
         {
-            Id = r.Id,
-            SensorId = r.SensorId,
-            SensorType = r.SensorType.ToString(),
-            Value = r.Value,
-            Timestamp = r.Timestamp
-        });
+            return Problem(title: "Invalid page", detail: "page must be 1 or greater", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (pageSize < 1 || pageSize > 500)
+        {
+            return Problem(title: "Invalid pageSize", detail: "pageSize must be between 1 and 500", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        DateTimeOffset? fromUtc = null;
+        DateTimeOffset? toUtc = null;
+
+        if (!string.IsNullOrWhiteSpace(fromDate))
+        {
+            if (!DateOnly.TryParseExact(fromDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedFrom))
+            {
+                return Problem(title: "Invalid fromDate", detail: "fromDate must be in yyyy-MM-dd format", statusCode: StatusCodes.Status400BadRequest);
+            }
+            // Start of day, inclusive.
+            fromUtc = new DateTimeOffset(parsedFrom.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        }
+
+        if (!string.IsNullOrWhiteSpace(toDate))
+        {
+            if (!DateOnly.TryParseExact(toDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedTo))
+            {
+                return Problem(title: "Invalid toDate", detail: "toDate must be in yyyy-MM-dd format", statusCode: StatusCodes.Status400BadRequest);
+            }
+            // End of day, inclusive.
+            toUtc = new DateTimeOffset(parsedTo.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero);
+        }
+
+        if (fromUtc.HasValue && toUtc.HasValue && fromUtc > toUtc)
+        {
+            return Problem(title: "Invalid date range", detail: "fromDate must not be after toDate", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var (items, totalCount) = _telemetryService.GetBySensorId(sensorId, fromUtc, toUtc, page, pageSize);
+
+        var response = new PagedTelemetryResponse
+        {
+            Items = items.Select(r => new TelemetryResponse
+            {
+                Id = r.Id,
+                SensorId = r.SensorId,
+                SensorType = r.SensorType.ToString(),
+                Value = r.Value,
+                Timestamp = r.Timestamp
+            }).ToList(),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+        };
 
         return Ok(response);
     }

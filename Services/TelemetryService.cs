@@ -42,8 +42,13 @@ public class TelemetryService : ITelemetryService
         return stored;
     }
 
-    public IReadOnlyList<TelemetryEvent> GetBySensorId(string sensorId)
+    public (IReadOnlyList<TelemetryEvent> Items, int TotalCount) GetBySensorId(
+        string sensorId,
+        DateTimeOffset? fromUtc,
+        DateTimeOffset? toUtc,
+        int page,
+        int pageSize)
     {
-        return _repository.GetBySensorId(sensorId);
+        return _repository.GetBySensorId(sensorId, fromUtc, toUtc, page, pageSize);
     }
 }

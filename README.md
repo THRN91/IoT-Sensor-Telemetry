@@ -52,9 +52,33 @@ available endpoints.
 | Method | Route                              | Purpose                                   |
 |--------|-------------------------------------|--------------------------------------------|
 | POST   | `/api/telemetry`                    | Ingest a telemetry reading                |
-| GET    | `/api/telemetry/{sensorId}`         | Fetch all readings for a sensor           |
+| GET    | `/api/telemetry/{sensorId}`         | Fetch readings for a sensor — paginated, with optional date-range filter |
 | POST   | `/api/kpi/compute?date=yyyy-MM-dd`  | Compute (and persist) daily KPIs          |
 | GET    | `/api/kpi/{date}`                   | Fetch previously computed KPIs (`yyyy-MM-dd`) |
+
+**`GET /api/telemetry/{sensorId}` query parameters** (all optional):
+
+| Param      | Default | Notes                                              |
+|------------|---------|-----------------------------------------------------|
+| `fromDate` | —       | `yyyy-MM-dd`, inclusive, start of that UTC day       |
+| `toDate`   | —       | `yyyy-MM-dd`, inclusive, end of that UTC day         |
+| `page`     | `1`     | 1-based page number                                 |
+| `pageSize` | `20`    | 1–500                                                |
+
+## Running with Docker
+
+```bash
+docker build -t iot-telemetry .
+docker run -p 8080:8080 iot-telemetry
+```
+
+The API is then reachable at `http://localhost:8080`. The image uses a multi-stage build
+(SDK to publish, `aspnet:8.0` runtime to run) and runs as a non-root user.
+
+> This Dockerfile was written and reviewed but **not build-tested**, since this sandbox
+> has no Docker daemon and cannot reach `mcr.microsoft.com` to pull base images. It follows
+> the standard, well-established ASP.NET Core multi-stage pattern — please verify the build
+> in an environment with Docker and outbound internet access before relying on it.
 
 ## Sample requests
 
@@ -71,9 +95,24 @@ curl -X POST http://localhost:5000/api/telemetry \
 ```
 `sensorType` must be exactly one of `Temperature`, `Humidity`, `Pressure`. Returns `201 Created`.
 
-**Fetch readings for a sensor**
+**Fetch readings for a sensor (paginated)**
 ```bash
-curl http://localhost:5000/api/telemetry/sensor-1
+curl "http://localhost:5000/api/telemetry/sensor-1?page=1&pageSize=10"
+```
+
+**Fetch readings within a date range**
+```bash
+curl "http://localhost:5000/api/telemetry/sensor-1?fromDate=2026-08-01&toDate=2026-08-14&page=1&pageSize=50"
+```
+Response shape:
+```json
+{
+  "items": [ { "id": "...", "sensorId": "sensor-1", "sensorType": "Temperature", "value": 32.5, "timestamp": "..." } ],
+  "page": 1,
+  "pageSize": 50,
+  "totalCount": 3,
+  "totalPages": 1
+}
 ```
 
 **Trigger KPI computation for a date**
@@ -106,6 +145,9 @@ for a date recomputes and overwrites the prior result rather than duplicating ro
   value fails model binding with a clear `400`
 - `value`: required, numeric, bounded to a realistic sensor range
 - `timestamp`: required, valid date-time, rejected if implausibly far in the future or past
+- `page` / `pageSize` / `fromDate` / `toDate` on the telemetry fetch endpoint are validated
+  independently (page ≥ 1, 1 ≤ pageSize ≤ 500, dates in strict `yyyy-MM-dd` format, `fromDate`
+  not after `toDate`) since query parameters bypass DTO model validation entirely
 - All validation failures return `400` with an RFC 7807 `ProblemDetails` body
 - Unhandled exceptions are caught by global middleware, logged server-side, and returned
   to the client as a sanitized `500 ProblemDetails` (no stack traces or internal details
@@ -130,8 +172,7 @@ for a date recomputes and overwrites the prior result rather than duplicating ro
 - No authentication was added — the problem statement doesn't call for it and the exercise
   is explicitly scoped to REST API design, validation, and aggregation logic. For a
   production deployment, add API key or JWT auth, rate limiting, and audit logging.
-- Not implemented (explicitly out of scope for this pass): unit tests, SQLite persistence,
-  pagination, date-range filtering, Docker.
+- Not implemented (explicitly out of scope for this pass): unit tests, SQLite persistence.
 
 ## Manual test coverage performed
 
@@ -141,5 +182,8 @@ for a date recomputes and overwrites the prior result rather than duplicating ro
 - Future timestamp → `400`
 - `sensorId` with disallowed characters → `400`
 - Fetch by sensor ID (existing and non-existent) → `200` with correct/empty results
+- Pagination: 25 seeded readings, `pageSize=20` → page 1 returns 20, page 2 returns remaining 5, `totalCount`/`totalPages` correct
+- Date-range filtering: single-day range and multi-day range both return the correct subset
+- Invalid `fromDate` format, `fromDate` after `toDate`, out-of-range `page`/`pageSize` → all `400`
 - KPI compute → correct per-sensor-type aggregation and high-value counts
 - KPI fetch for a date with no data → `404`

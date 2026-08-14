@@ -19,3 +19,13 @@ public class DailyKpiResponse
     public double? AverageValue { get; set; }
     public int ReadingCount { get; set; }
 }
+
+/// <summary>Outbound shape for a page of telemetry results, with paging metadata.</summary>
+public class PagedTelemetryResponse
+{
+    public IReadOnlyList<TelemetryResponse> Items { get; set; } = Array.Empty<TelemetryResponse>();
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalCount { get; set; }
+    public int TotalPages { get; set; }
+}

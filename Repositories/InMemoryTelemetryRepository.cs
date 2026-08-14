@@ -19,12 +19,35 @@ public class InMemoryTelemetryRepository : ITelemetryRepository
         return telemetryEvent;
     }
 
-    public IReadOnlyList<TelemetryEvent> GetBySensorId(string sensorId)
+    public (IReadOnlyList<TelemetryEvent> Items, int TotalCount) GetBySensorId(
+        string sensorId,
+        DateTimeOffset? fromUtc,
+        DateTimeOffset? toUtc,
+        int page,
+        int pageSize)
     {
-        return _store.Values
-            .Where(e => string.Equals(e.SensorId, sensorId, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(e => e.Timestamp)
+        var query = _store.Values
+            .Where(e => string.Equals(e.SensorId, sensorId, StringComparison.OrdinalIgnoreCase));
+
+        if (fromUtc.HasValue)
+        {
+            query = query.Where(e => e.Timestamp >= fromUtc.Value);
+        }
+
+        if (toUtc.HasValue)
+        {
+            query = query.Where(e => e.Timestamp <= toUtc.Value);
+        }
+
+        var ordered = query.OrderByDescending(e => e.Timestamp).ToList();
+        var totalCount = ordered.Count;
+
+        var page_items = ordered
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToList();
+
+        return (page_items, totalCount);
     }
 
     public IReadOnlyList<TelemetryEvent> GetByDate(DateOnly date)
