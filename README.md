@@ -67,18 +67,37 @@ available endpoints.
 
 ## Running with Docker
 
+**Quickest — one command via Docker Compose:**
+```bash
+docker compose up
+```
+Then the API is reachable at `http://localhost:8080`.
+
+**Or manually:**
 ```bash
 docker build -t iot-telemetry .
 docker run -p 8080:8080 iot-telemetry
 ```
 
-The API is then reachable at `http://localhost:8080`. The image uses a multi-stage build
-(SDK to publish, `aspnet:8.0` runtime to run) and runs as a non-root user.
+The image uses a multi-stage build (SDK to publish, `aspnet:8.0` runtime to run) and runs
+as a non-root user.
 
-> This Dockerfile was written and reviewed but **not build-tested**, since this sandbox
-> has no Docker daemon and cannot reach `mcr.microsoft.com` to pull base images. It follows
-> the standard, well-established ASP.NET Core multi-stage pattern — please verify the build
-> in an environment with Docker and outbound internet access before relying on it.
+**Sharing with others without giving them the source:** push the built image to a registry
+(e.g. Docker Hub) once, and anyone can then run it with a single command and no local build:
+```bash
+docker build -t yourusername/iot-telemetry:latest .
+docker login
+docker push yourusername/iot-telemetry:latest
+
+# anyone else then just runs:
+docker run -p 8080:8080 yourusername/iot-telemetry:latest
+```
+
+> This Dockerfile and `docker-compose.yml` were written and reviewed but **not build-tested**
+> — the sandbox this project was built in has no Docker daemon and cannot reach
+> `mcr.microsoft.com` to pull base images. They follow the standard, well-established
+> ASP.NET Core containerization pattern, but please verify the build in an environment with
+> Docker and outbound internet access before relying on it or sharing it further.
 
 ## Sample requests
 
