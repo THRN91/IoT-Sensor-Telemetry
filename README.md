@@ -1,3 +1,10 @@
+# Sample Output:
+**GET:**
+<img width="842" height="486" alt="image" src="https://github.com/user-attachments/assets/b1adb9af-3d9b-4f99-ac2e-d7b8c6ff3f66" />
+
+**Post**
+<img width="939" height="336" alt="image" src="https://github.com/user-attachments/assets/ad2a01ed-5936-4f4f-91c3-80b01c0fe58c" />
+
 # IoT Sensor Telemetry Service
 
 A lightweight REST API microservice that ingests IoT sensor telemetry (Temperature,
@@ -103,7 +110,7 @@ docker run -p 8080:8080 yourusername/iot-telemetry:latest
 
 **Ingest a reading**
 ```bash
-curl -X POST http://localhost:5000/api/telemetry \
+curl -X POST http://localhost:5177/api/telemetry \
   -H "Content-Type: application/json" \
   -d '{
     "sensorId": "sensor-1",
@@ -116,12 +123,12 @@ curl -X POST http://localhost:5000/api/telemetry \
 
 **Fetch readings for a sensor (paginated)**
 ```bash
-curl "http://localhost:5000/api/telemetry/sensor-1?page=1&pageSize=10"
+curl "http://localhost:5177/api/telemetry/sensor-1?page=1&pageSize=10"
 ```
 
 **Fetch readings within a date range**
 ```bash
-curl "http://localhost:5000/api/telemetry/sensor-1?fromDate=2026-08-01&toDate=2026-08-14&page=1&pageSize=50"
+curl "http://localhost:5177/api/telemetry/sensor-1?fromDate=2026-08-01&toDate=2026-08-14&page=1&pageSize=50"
 ```
 Response shape:
 ```json
@@ -136,12 +143,12 @@ Response shape:
 
 **Trigger KPI computation for a date**
 ```bash
-curl -X POST "http://localhost:5000/api/kpi/compute?date=2026-08-14"
+curl -X POST "http://localhost:5177/api/kpi/compute?date=2026-08-14"
 ```
 
 **Fetch computed KPIs for a date**
 ```bash
-curl http://localhost:5000/api/kpi/2026-08-14
+curl http://localhost:5177/api/kpi/2026-08-14
 ```
 Returns `404` with a `ProblemDetails` body if KPIs haven't been computed yet for that date.
 
